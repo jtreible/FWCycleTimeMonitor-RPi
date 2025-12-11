@@ -13,7 +13,9 @@
       "Bash(dir /s /b *.py 2)",
       "Bash(nul)",
       "Bash(findstr:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(git config:*)",
+      "Bash(git remote:*)"
     ],
     "deny": [],
     "ask": []
