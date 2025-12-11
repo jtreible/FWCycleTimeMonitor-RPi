@@ -1,5 +1,5 @@
 [Desktop Entry]
 Name=Install
-Exec=sudo /home/pi1/FWCycleTimeMonitor-RPi/scripts/install_fw_cycle_monitor.sh
+Exec=sudo bash /home/fstre/FWCycleTimeMonitor-RPi/scripts/install_fw_cycle_monitor.sh
 Terminal=true
 Type=Application

@@ -1,5 +1,0 @@
-[Desktop Entry]
-Name=GitClone
-Exec=git clone https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
-Terminal=true
-Type=Application
