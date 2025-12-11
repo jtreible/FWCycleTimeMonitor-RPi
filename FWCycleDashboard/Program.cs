@@ -44,6 +44,15 @@ builder.Services.AddHttpClient("RemoteSupervisor")
 
 builder.Services.AddScoped<RemoteSupervisorClient>();
 
+// Add HTTP client for PoE switch
+builder.Services.AddHttpClient("PoESwitch")
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true // Accept self-signed certs from switches
+    });
+
+builder.Services.AddScoped<IPoESwitchClient, TPLinkJetStreamClient>();
+
 var app = builder.Build();
 
 // Ensure database is created

@@ -120,6 +120,19 @@
                         <input type="checkbox" class="form-check-input" @bind="editingMachine.UseHttps" />
                         <label class="form-check-label">Use HTTPS</label>
                     </div>
+
+                    <hr />
+                    <h6 class="mb-3">PoE Switch Configuration (for Remote Power Cycle)</h6>
+                    <div class="mb-3">
+                        <label class="form-label">PoE Switch IP Address (optional)</label>
+                        <input type="text" class="form-control" @bind="editingMachine.PoESwitchIp" placeholder="192.168.1.100" />
+                        <small class="form-text text-muted">IP address of the PoE switch managing this machine</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">PoE Switch Port Number (optional)</label>
+                        <input type="number" class="form-control" @bind="editingMachine.PoESwitchPort" placeholder="8" min="1" max="48" />
+                        <small class="form-text text-muted">Physical port number on the PoE switch (1-48)</small>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="HideModal">Cancel</button>
@@ -171,7 +184,9 @@
             GroupId = machine.GroupId,
             Location = machine.Location,
             Description = machine.Description,
-            UseHttps = machine.UseHttps
+            UseHttps = machine.UseHttps,
+            PoESwitchIp = machine.PoESwitchIp,
+            PoESwitchPort = machine.PoESwitchPort
         };
         showModal = true;
     }
@@ -195,6 +210,8 @@
                 existing.Location = editingMachine.Location;
                 existing.Description = editingMachine.Description;
                 existing.UseHttps = editingMachine.UseHttps;
+                existing.PoESwitchIp = editingMachine.PoESwitchIp;
+                existing.PoESwitchPort = editingMachine.PoESwitchPort;
             }
         }
 

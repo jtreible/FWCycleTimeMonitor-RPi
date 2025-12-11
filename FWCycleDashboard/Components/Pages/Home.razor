@@ -6,6 +6,7 @@
 @using Microsoft.JSInterop
 @inject ApplicationDbContext DbContext
 @inject RemoteSupervisorClient SupervisorClient
+@inject IPoESwitchClient PoESwitchClient
 @inject IJSRuntime JSRuntime
 @implements IDisposable
 
@@ -208,6 +209,13 @@ else
                             <button class="btn btn-sm btn-outline-danger w-100 mb-1" @onclick="() => RebootPi(machine)" disabled="@(!status.IsOnline)" style="font-size: 0.7rem;">
                                 Reboot Pi
                             </button>
+
+                            @if (!string.IsNullOrEmpty(machine.PoESwitchIp) && machine.PoESwitchPort.HasValue)
+                            {
+                                <button class="btn btn-sm btn-outline-warning w-100 mb-1" @onclick="() => PowerCycleViaPOE(machine)" disabled="@(!status.IsOnline)" style="font-size: 0.7rem;">
+                                    Power Cycle (PoE)
+                                </button>
+                            }
 
                             @if (status.StackLight != null)
                             {
@@ -495,6 +503,46 @@ else
         await DbContext.SaveChangesAsync();
 
         // Pi will be offline during reboot, wait 30 seconds before refresh
+        await Task.Delay(30000);
+        await RefreshAll();
+    }
+
+    private async Task PowerCycleViaPOE(Machine machine)
+    {
+        if (string.IsNullOrEmpty(machine.PoESwitchIp) || !machine.PoESwitchPort.HasValue)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "PoE switch configuration is missing for this machine.");
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power cycle {machine.MachineId} via PoE switch? This will cut power to the Raspberry Pi and restore it after 3 seconds."
+        );
+
+        if (!confirmed) return;
+
+        var (success, error) = await PoESwitchClient.PowerCyclePortAsync(
+            machine.PoESwitchIp,
+            machine.PoESwitchPort.Value,
+            waitSeconds: 3
+        );
+
+        DbContext.CommandHistory.Add(new CommandHistory
+        {
+            MachineId = machine.Id,
+            Command = $"poe: power cycle (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+            Success = success,
+            Error = error
+        });
+        await DbContext.SaveChangesAsync();
+
+        if (!success)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Power cycle failed: {error}");
+        }
+
+        // Pi will be offline during power cycle, wait 30 seconds before refresh
         await Task.Delay(30000);
         await RefreshAll();
     }

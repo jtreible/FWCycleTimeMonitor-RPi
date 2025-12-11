@@ -10,27 +10,26 @@ namespace FWCycleDashboard.Services;
 /// </summary>
 public class TPLinkJetStreamClient : IPoESwitchClient
 {
-    private readonly HttpClient _httpClient;
+    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<TPLinkJetStreamClient> _logger;
     private readonly string? _username;
     private readonly string? _password;
     private readonly Dictionary<string, string> _sessionTokens = new();
 
     public TPLinkJetStreamClient(
-        HttpClient httpClient,
+        IHttpClientFactory httpClientFactory,
         ILogger<TPLinkJetStreamClient> logger,
         IConfiguration configuration)
     {
-        _httpClient = httpClient;
+        _httpClientFactory = httpClientFactory;
         _logger = logger;
         _username = configuration["PoESwitch:Username"];
         _password = configuration["PoESwitch:Password"];
+    }
 
-        // Disable SSL certificate validation for self-signed certs (common on switches)
-        var handler = new HttpClientHandler
-        {
-            ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true
-        };
+    private HttpClient CreateHttpClient()
+    {
+        return _httpClientFactory.CreateClient("PoESwitch");
     }
 
     public async Task<(bool success, string? error)> PowerCyclePortAsync(
