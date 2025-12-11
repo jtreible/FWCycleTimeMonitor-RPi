@@ -39,7 +39,7 @@ A lightweight Raspberry Pi application that logs mold close events for injection
 1. Download or clone the repository onto the Raspberry Pi:
 
    ```bash
-   git clone https://github.com/<your-org>/FWCycleTimeMonitor-RPi.git
+   git clone https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
    cd FWCycleTimeMonitor-RPi
    ```
 
@@ -84,7 +84,7 @@ Follow these steps if you prefer to manage the environment yourself (e.g., durin
 2. **Clone (or extract) the repository**
 
    ```bash
-   git clone https://github.com/<your-org>/FWCycleTimeMonitor-RPi.git
+   git clone https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
    cd FWCycleTimeMonitor-RPi
    ```
 

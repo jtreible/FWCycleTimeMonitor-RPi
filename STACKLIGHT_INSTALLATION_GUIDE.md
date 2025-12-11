@@ -28,7 +28,7 @@ SSH into your Raspberry Pi, then choose one of the options below:
 ```bash
 # Clone the feature branch directly
 cd ~
-git clone -b feature/stack-light-control https://github.com/jmtreible/FWCycleTimeMonitor-RPi.git
+git clone -b feature/stack-light-control https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
 cd FWCycleTimeMonitor-RPi
 ```
 
@@ -57,7 +57,7 @@ git pull origin feature/stack-light-control
 ```bash
 # Clone the repository
 cd ~
-git clone https://github.com/jmtreible/FWCycleTimeMonitor-RPi.git
+git clone https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
 cd FWCycleTimeMonitor-RPi
 
 # Checkout the feature branch
@@ -66,7 +66,7 @@ git checkout feature/stack-light-control
 
 **Note:** Once the feature is tested and merged to `main`, you can use:
 ```bash
-git clone https://github.com/jmtreible/FWCycleTimeMonitor-RPi.git
+git clone https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
 ```
 (No need to specify the branch - it will use `main` by default)
 

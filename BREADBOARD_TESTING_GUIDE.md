@@ -200,7 +200,7 @@ Before powering on:
 ```bash
 # If not already installed, install from feature branch
 cd ~
-git clone -b feature/stack-light-control https://github.com/jmtreible/FWCycleTimeMonitor-RPi.git
+git clone -b feature/stack-light-control https://github.com/jtreible/FWCycleTimeMonitor-RPi.git
 cd FWCycleTimeMonitor-RPi
 sudo bash scripts/install_fw_cycle_monitor.sh
 ```
