@@ -15,7 +15,12 @@
       "Bash(findstr:*)",
       "Bash(python:*)",
       "Bash(git config:*)",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(git grep:*)",
+      "Bash(git pull:*)",
+      "Bash(git restore:*)",
+      "WebFetch(domain:www.amazon.com)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

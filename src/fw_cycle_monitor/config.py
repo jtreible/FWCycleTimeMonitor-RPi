@@ -43,10 +43,10 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 class AppConfig:
     """User editable configuration."""
 
-    machine_id: str = "M201"
-    gpio_pin: int = 17
-    csv_directory: Path = Path.home() / "fw_cycle_monitor_data"
-    reset_hour: int = 3
+    machine_id: str = "M"
+    gpio_pin: int = 2
+    csv_directory: Path = Path("/home/fstre/FWCycle")
+    reset_hour: int = 4
 
     def __post_init__(self) -> None:
         self.machine_id = _sanitize_machine_id(self.machine_id)
