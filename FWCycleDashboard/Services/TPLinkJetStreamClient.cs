@@ -1,35 +1,29 @@
-using System.Net.Http.Headers;
 using System.Text;
-using System.Text.Json;
+using Renci.SshNet;
 
 namespace FWCycleDashboard.Services;
 
 /// <summary>
 /// PoE switch client implementation for TP-Link JetStream series switches.
-/// Supports TL-SG34xx, SG34xx series with Omada SDN or SNMP control.
+/// Uses SSH/CLI to control PoE ports on TL-SG2218P, TL-SG3452P, and similar models.
 /// </summary>
 public class TPLinkJetStreamClient : IPoESwitchClient
 {
-    private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<TPLinkJetStreamClient> _logger;
     private readonly string? _username;
     private readonly string? _password;
-    private readonly Dictionary<string, string> _sessionTokens = new();
+    private readonly int _sshPort;
+    private readonly int _commandTimeout;
 
     public TPLinkJetStreamClient(
-        IHttpClientFactory httpClientFactory,
         ILogger<TPLinkJetStreamClient> logger,
         IConfiguration configuration)
     {
-        _httpClientFactory = httpClientFactory;
         _logger = logger;
-        _username = configuration["PoESwitch:Username"];
+        _username = configuration["PoESwitch:Username"] ?? "admin";
         _password = configuration["PoESwitch:Password"];
-    }
-
-    private HttpClient CreateHttpClient()
-    {
-        return _httpClientFactory.CreateClient("PoESwitch");
+        _sshPort = int.TryParse(configuration["PoESwitch:SshPort"], out var port) ? port : 22;
+        _commandTimeout = int.TryParse(configuration["PoESwitch:CommandTimeoutSeconds"], out var timeout) ? timeout : 30;
     }
 
     public async Task<(bool success, string? error)> PowerCyclePortAsync(
@@ -75,16 +69,24 @@ public class TPLinkJetStreamClient : IPoESwitchClient
     {
         try
         {
-            var token = await AuthenticateAsync(switchIp);
-            if (string.IsNullOrEmpty(token))
+            var commands = new[]
             {
-                return (null, "Failed to authenticate with switch");
+                "enable",
+                $"show power inline interface gigabitEthernet 1/0/{portNumber}"
+            };
+
+            var (success, output, error) = await ExecuteSshCommandsAsync(switchIp, commands);
+
+            if (!success)
+            {
+                return (null, error);
             }
 
-            // TODO: Implement actual API call when switch model is known
-            // This is a placeholder that will be updated with actual switch API
-            _logger.LogWarning("GetPortStatusAsync not yet implemented for switch {SwitchIp}", switchIp);
-            return (null, "Not implemented - awaiting switch model details");
+            // Parse output to determine if PoE is enabled
+            // Output typically contains "Admin Mode: Enable" or "Admin Mode: Disable"
+            var isEnabled = output?.Contains("Admin Mode: Enable", StringComparison.OrdinalIgnoreCase) ?? false;
+
+            return (isEnabled, null);
         }
         catch (Exception ex)
         {
@@ -101,28 +103,44 @@ public class TPLinkJetStreamClient : IPoESwitchClient
     {
         try
         {
-            var token = await AuthenticateAsync(switchIp);
-            if (string.IsNullOrEmpty(token))
+            if (string.IsNullOrEmpty(_password))
             {
-                return (false, "Failed to authenticate with switch");
+                return (false, "SSH password not configured. Set PoESwitch:Password in appsettings.json");
             }
 
-            // TODO: Implement actual API call when switch model is known
-            // This is a placeholder implementation that will be updated with:
-            // - Actual API endpoints for your specific switch model
-            // - Proper request formatting
-            // - Response parsing
+            var action = enabled ? "enable" : "disable";
 
-            _logger.LogWarning(
-                "SetPortPoEStateAsync not yet fully implemented - awaiting switch model details. " +
-                "Would {Action} PoE on port {Port} of switch {SwitchIp}",
-                enabled ? "enable" : "disable",
+            // TP-Link JetStream CLI command sequence:
+            // enable -> config -> interface gigabitEthernet 1/0/X -> power inline supply enable/disable -> exit -> exit
+            var commands = new[]
+            {
+                "enable",
+                "config",
+                $"interface gigabitEthernet 1/0/{portNumber}",
+                $"power inline supply {action}",
+                "exit",
+                "exit"
+            };
+
+            _logger.LogInformation(
+                "Executing SSH command to {Action} PoE on port {Port} of switch {SwitchIp}",
+                action,
                 portNumber,
                 switchIp);
 
-            // For now, simulate success for testing
-            // Remove this and implement actual API call once switch is purchased
-            await Task.Delay(100); // Simulate network delay
+            var (success, output, error) = await ExecuteSshCommandsAsync(switchIp, commands);
+
+            if (!success)
+            {
+                return (false, error);
+            }
+
+            _logger.LogInformation(
+                "Successfully {Action}d PoE on port {Port} of switch {SwitchIp}",
+                action,
+                portNumber,
+                switchIp);
+
             return (true, null);
         }
         catch (Exception ex)
@@ -133,34 +151,77 @@ public class TPLinkJetStreamClient : IPoESwitchClient
         }
     }
 
-    private async Task<string?> AuthenticateAsync(string switchIp)
+    private async Task<(bool success, string? output, string? error)> ExecuteSshCommandsAsync(
+        string host,
+        string[] commands)
     {
-        // Check if we already have a valid session token
-        if (_sessionTokens.TryGetValue(switchIp, out var token))
+        return await Task.Run(() =>
         {
-            return token;
-        }
+            try
+            {
+                using var client = new SshClient(host, _sshPort, _username, _password);
 
-        try
-        {
-            // TODO: Implement actual authentication when switch model is known
-            // Different TP-Link JetStream models use different auth methods:
-            // - Web GUI: Cookie-based session
-            // - Omada API: OAuth2 or API token
-            // - SNMP: Community string (not HTTP)
+                client.ConnectionInfo.Timeout = TimeSpan.FromSeconds(_commandTimeout);
 
-            _logger.LogInformation("Authenticating to switch {SwitchIp}", switchIp);
+                _logger.LogDebug("Connecting to switch {Host}:{Port} as {Username}", host, _sshPort, _username);
 
-            // Placeholder - will be replaced with actual implementation
-            var dummyToken = $"session_{switchIp}_{Guid.NewGuid()}";
-            _sessionTokens[switchIp] = dummyToken;
+                client.Connect();
 
-            return dummyToken;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to authenticate to switch {SwitchIp}", switchIp);
-            return null;
-        }
+                if (!client.IsConnected)
+                {
+                    return (false, null, "Failed to establish SSH connection");
+                }
+
+                using var shellStream = client.CreateShellStream("terminal", 80, 24, 800, 600, 1024);
+
+                // Wait for initial prompt
+                Thread.Sleep(1000);
+
+                var output = new StringBuilder();
+
+                foreach (var command in commands)
+                {
+                    _logger.LogDebug("Executing command: {Command}", command);
+
+                    shellStream.WriteLine(command);
+                    Thread.Sleep(500); // Wait for command to execute
+
+                    // Read output
+                    while (shellStream.DataAvailable)
+                    {
+                        var line = shellStream.ReadLine();
+                        if (line != null)
+                        {
+                            output.AppendLine(line);
+                        }
+                    }
+                }
+
+                // Give final command time to complete
+                Thread.Sleep(500);
+
+                // Read any remaining output
+                while (shellStream.DataAvailable)
+                {
+                    var line = shellStream.ReadLine();
+                    if (line != null)
+                    {
+                        output.AppendLine(line);
+                    }
+                }
+
+                client.Disconnect();
+
+                var outputStr = output.ToString();
+                _logger.LogDebug("SSH command output: {Output}", outputStr);
+
+                return (true, outputStr, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SSH command execution failed for host {Host}", host);
+                return (false, null, ex.Message);
+            }
+        });
     }
 }
