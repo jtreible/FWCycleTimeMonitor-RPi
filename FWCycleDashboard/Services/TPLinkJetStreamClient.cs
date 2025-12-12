@@ -155,7 +155,7 @@ public class TPLinkJetStreamClient : IPoESwitchClient
         string host,
         string[] commands)
     {
-        return await Task.Run(() =>
+        return await Task.Run<(bool success, string? output, string? error)>(() =>
         {
             try
             {
@@ -174,8 +174,10 @@ public class TPLinkJetStreamClient : IPoESwitchClient
 
                 using var shellStream = client.CreateShellStream("terminal", 80, 24, 800, 600, 1024);
 
+                _logger.LogDebug("Shell stream created, waiting for initial prompt");
+
                 // Wait for initial prompt
-                Thread.Sleep(1000);
+                WaitForCommandComplete(shellStream, 5000);
 
                 var output = new StringBuilder();
 
@@ -184,30 +186,10 @@ public class TPLinkJetStreamClient : IPoESwitchClient
                     _logger.LogDebug("Executing command: {Command}", command);
 
                     shellStream.WriteLine(command);
-                    Thread.Sleep(500); // Wait for command to execute
 
-                    // Read output
-                    while (shellStream.DataAvailable)
-                    {
-                        var line = shellStream.ReadLine();
-                        if (line != null)
-                        {
-                            output.AppendLine(line);
-                        }
-                    }
-                }
-
-                // Give final command time to complete
-                Thread.Sleep(500);
-
-                // Read any remaining output
-                while (shellStream.DataAvailable)
-                {
-                    var line = shellStream.ReadLine();
-                    if (line != null)
-                    {
-                        output.AppendLine(line);
-                    }
+                    // Wait for command to complete by monitoring data flow
+                    var commandOutput = WaitForCommandComplete(shellStream, 10000);
+                    output.Append(commandOutput);
                 }
 
                 client.Disconnect();
@@ -223,5 +205,35 @@ public class TPLinkJetStreamClient : IPoESwitchClient
                 return (false, null, ex.Message);
             }
         });
+    }
+
+    private static string WaitForCommandComplete(ShellStream stream, int timeoutMs)
+    {
+        var output = new StringBuilder();
+        var startTime = DateTime.Now;
+        var lastDataTime = DateTime.Now;
+        var noDataTimeout = 1000; // If no data for 1 second, consider command complete
+        bool dataReceived = false;
+
+        while ((DateTime.Now - startTime).TotalMilliseconds < timeoutMs)
+        {
+            if (stream.DataAvailable)
+            {
+                // Read all available data
+                var data = stream.Read();
+                output.Append(data);
+                lastDataTime = DateTime.Now;
+                dataReceived = true;
+            }
+            else if (dataReceived && (DateTime.Now - lastDataTime).TotalMilliseconds > noDataTimeout)
+            {
+                // No data for 1 second after receiving data - command completed
+                return output.ToString();
+            }
+
+            Thread.Sleep(50); // Small delay to avoid busy waiting
+        }
+
+        return output.ToString();
     }
 }

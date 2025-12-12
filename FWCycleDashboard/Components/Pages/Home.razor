@@ -27,6 +27,79 @@
     </button>
 </div>
 
+@if (machineStatuses != null && machineStatuses.Any())
+{
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <strong>Service Controls - All Machines</strong>
+                </div>
+                <div class="card-body p-2">
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-success"
+                                @onclick="() => BulkStartAll()"
+                                disabled="@isBulkOperating"
+                                title="Start All Services">
+                            <i class="bi bi-play-fill"></i> Start All
+                        </button>
+                        <button class="btn btn-warning"
+                                @onclick="() => BulkRestartAll()"
+                                disabled="@isBulkOperating"
+                                title="Restart All Services">
+                            <i class="bi bi-arrow-clockwise"></i> Restart All
+                        </button>
+                        <button class="btn btn-danger"
+                                @onclick="() => BulkStopAll()"
+                                disabled="@isBulkOperating"
+                                title="Stop All Services">
+                            <i class="bi bi-stop-fill"></i> Stop All
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @{
+            var poeMachines = machines.Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+        }
+        @if (poeMachines.Any())
+        {
+            <div class="col-md-6">
+                <div class="card border-warning">
+                    <div class="card-header bg-warning">
+                        <strong>PoE Controls - All Machines</strong>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-primary"
+                                    @onclick="() => BulkPoEPowerCycle()"
+                                    disabled="@isBulkOperating"
+                                    title="Power Cycle All (PoE)"
+                                    style="position: relative;">
+                                <i class="bi bi-power"></i>
+                                <i class="bi bi-arrow-clockwise" style="position: absolute; font-size: 0.6rem; top: 2px; right: 2px;"></i>
+                                Power Cycle All
+                            </button>
+                            <button class="btn btn-danger"
+                                    @onclick="() => BulkPoEPowerDown()"
+                                    disabled="@isBulkOperating"
+                                    title="Power Down All (PoE)">
+                                <i class="bi bi-power"></i> Power Down All
+                            </button>
+                            <button class="btn btn-success"
+                                    @onclick="() => BulkPoEPowerOn()"
+                                    disabled="@isBulkOperating"
+                                    title="Power On All (PoE)">
+                                <i class="bi bi-power"></i> Power On All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
 @if (machineStatuses == null)
 {
     <p><em>Loading...</em></p>
@@ -86,23 +159,67 @@ else
                 var onlineCount = groupMachines.Count(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true);
                 <div class="col-md-4 col-lg-3 mb-3">
                     <div class="card border-primary group-tile">
-                        <div class="card-header bg-primary text-white">
+                        <div class="card-header bg-primary text-white" style="cursor: pointer;" @onclick="() => FilterByGroup(group.Id)" title="Click to filter machines by this group">
                             <strong>@group.Name</strong>
                             <span class="badge bg-light text-dark float-end">@onlineCount/@groupMachines.Count online</span>
                         </div>
                         <div class="card-body p-2">
                             <div class="mb-2">
-                                <small class="text-muted d-block mb-1"><strong>Reboot Group:</strong></small>
-                                <button class="btn btn-sm btn-danger w-100"
-                                        @onclick="() => BulkRebootGroup(group.Id)"
-                                        disabled="@(isBulkOperating || onlineCount == 0)">
-                                    @if (isBulkOperating && currentBulkGroupId == group.Id && currentBulkOp == "reboot")
-                                    {
-                                        <span class="spinner-border spinner-border-sm me-1"></span>
-                                    }
-                                    Reboot All Pi
-                                </button>
+                                <small class="text-muted d-block mb-1"><strong>Service Controls:</strong></small>
+                                <div class="btn-group btn-group-sm w-100 mb-1" role="group">
+                                    <button class="btn btn-success"
+                                            @onclick="() => BulkStartGroup(group.Id)"
+                                            disabled="@(isBulkOperating || onlineCount == 0)"
+                                            title="Start All Services">
+                                        <i class="bi bi-play-fill"></i>
+                                    </button>
+                                    <button class="btn btn-warning"
+                                            @onclick="() => BulkRestartGroup(group.Id)"
+                                            disabled="@(isBulkOperating || onlineCount == 0)"
+                                            title="Restart All Services">
+                                        <i class="bi bi-arrow-clockwise"></i>
+                                    </button>
+                                    <button class="btn btn-danger"
+                                            @onclick="() => BulkStopGroup(group.Id)"
+                                            disabled="@(isBulkOperating || onlineCount == 0)"
+                                            title="Stop All Services">
+                                        <i class="bi bi-stop-fill"></i>
+                                    </button>
+                                </div>
                             </div>
+
+                            @{
+                                var groupPoeCount = groupMachines.Count(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue);
+                            }
+
+                            @if (groupPoeCount > 0)
+                            {
+                                <div class="mb-2">
+                                    <small class="text-muted d-block mb-1"><strong>PoE Power Controls:</strong></small>
+                                    <div class="btn-group btn-group-sm w-100 mb-1" role="group">
+                                        <button class="btn btn-primary"
+                                                @onclick="() => BulkPoEPowerCycleGroup(group.Id)"
+                                                disabled="@isBulkOperating"
+                                                title="Power Cycle Group"
+                                                style="position: relative;">
+                                            <i class="bi bi-power"></i>
+                                            <i class="bi bi-arrow-clockwise" style="position: absolute; font-size: 0.6rem; top: 2px; right: 2px;"></i>
+                                        </button>
+                                        <button class="btn btn-danger"
+                                                @onclick="() => BulkPoEPowerDownGroup(group.Id)"
+                                                disabled="@isBulkOperating"
+                                                title="Power Down Group">
+                                            <i class="bi bi-power"></i>
+                                        </button>
+                                        <button class="btn btn-success"
+                                                @onclick="() => BulkPoEPowerOnGroup(group.Id)"
+                                                disabled="@isBulkOperating"
+                                                title="Power On Group">
+                                            <i class="bi bi-power"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
 
                             <div class="border-top pt-2">
                                 <small class="text-muted d-block mb-1"><strong>Stack Lights:</strong></small>
@@ -147,9 +264,27 @@ else
         </div>
     }
 
-    <h4 class="mt-4 mb-3">Machines</h4>
+    <h4 class="mt-4 mb-3">
+        Machines
+        @if (selectedGroupId.HasValue)
+        {
+            var selectedGroup = groups.FirstOrDefault(g => g.Id == selectedGroupId.Value);
+            <span class="badge bg-primary">Filtered by: @selectedGroup?.Name</span>
+            <button class="btn btn-sm btn-outline-secondary ms-2" @onclick="ClearGroupFilter">Show All</button>
+        }
+    </h4>
+    <div class="mb-3">
+        <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" placeholder="Search machines by ID, IP, or group..." @bind="searchTerm" @bind:event="oninput" />
+            @if (!string.IsNullOrEmpty(searchTerm))
+            {
+                <button class="btn btn-outline-secondary" @onclick="ClearSearch"><i class="bi bi-x-circle"></i></button>
+            }
+        </div>
+    </div>
     <div class="row">
-        @foreach (var status in machineStatuses)
+        @foreach (var status in GetFilteredMachineStatuses())
         {
             var machine = machines.FirstOrDefault(m => m.Id == status.MachineId);
             if (machine != null)
@@ -163,9 +298,14 @@ else
                             </span>
                         </div>
                         <div class="card-body p-2">
-                            @if (machine.Group != null)
+                            @{
+                                var allGroups = new List<MachineGroup>();
+                                if (machine.Group != null) allGroups.Add(machine.Group);
+                                allGroups.AddRange(machine.Groups.Where(g => machine.GroupId == null || g.Id != machine.GroupId));
+                            }
+                            @if (allGroups.Any())
                             {
-                                <p class="text-muted mb-1" style="font-size: 0.7rem;">@machine.Group.Name</p>
+                                <p class="text-muted mb-1" style="font-size: 0.7rem;">@string.Join(", ", allGroups.Select(g => g.Name))</p>
                             }
                             <p class="mb-1" style="font-size: 0.7rem;">@machine.IpAddress:@machine.Port</p>
                             @if (status.IsOnline && status.Status != null)
@@ -195,6 +335,7 @@ else
                             }
                         </div>
                         <div class="card-footer p-2">
+                            <small class="text-muted d-block mb-1" style="font-size: 0.65rem;"><strong>Service Control:</strong></small>
                             <div class="btn-group btn-group-sm w-100 mb-1" role="group">
                                 <button class="btn btn-success" @onclick="() => StartService(machine)" disabled="@(!status.IsOnline)" title="Start">
                                     <i class="bi bi-play-fill"></i>
@@ -206,14 +347,27 @@ else
                                     <i class="bi bi-stop-fill"></i>
                                 </button>
                             </div>
-                            <button class="btn btn-sm btn-outline-danger w-100 mb-1" @onclick="() => RebootPi(machine)" disabled="@(!status.IsOnline)" style="font-size: 0.7rem;">
-                                Reboot Pi
-                            </button>
 
                             @if (!string.IsNullOrEmpty(machine.PoESwitchIp) && machine.PoESwitchPort.HasValue)
                             {
-                                <button class="btn btn-sm btn-outline-warning w-100 mb-1" @onclick="() => PowerCycleViaPOE(machine)" disabled="@(!status.IsOnline)" style="font-size: 0.7rem;">
-                                    Power Cycle (PoE)
+                                <small class="text-muted d-block mb-1" style="font-size: 0.65rem;"><strong>PoE Power:</strong></small>
+                                <div class="btn-group btn-group-sm w-100 mb-1" role="group">
+                                    <button class="btn btn-primary" @onclick="() => PowerCycleViaPOE(machine)" title="Power Cycle (PoE)" style="position: relative;">
+                                        <i class="bi bi-power"></i>
+                                        <i class="bi bi-arrow-clockwise" style="position: absolute; font-size: 0.6rem; top: 2px; right: 2px;"></i>
+                                    </button>
+                                    <button class="btn btn-danger" @onclick="() => PowerDownViaPOE(machine)" title="Power Down (PoE)">
+                                        <i class="bi bi-power"></i>
+                                    </button>
+                                    <button class="btn btn-success" @onclick="() => PowerOnViaPOE(machine)" title="Power On (PoE)">
+                                        <i class="bi bi-power"></i>
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-danger w-100 mb-1" @onclick="() => RebootPi(machine)" disabled="@(!status.IsOnline)" style="font-size: 0.7rem;">
+                                    Reboot Pi
                                 </button>
                             }
 
@@ -266,6 +420,8 @@ else
     private string? currentBulkOp;
     private int? currentBulkGroupId;
     private System.Threading.Timer? refreshTimer;
+    private string searchTerm = string.Empty;
+    private int? selectedGroupId = null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -276,8 +432,63 @@ else
 
     private async Task LoadMachines()
     {
-        machines = await DbContext.Machines.Include(m => m.Group).ToListAsync();
+        machines = await DbContext.Machines
+            .Include(m => m.Group)
+            .Include(m => m.Groups)
+            .ToListAsync();
         groups = await DbContext.MachineGroups.ToListAsync();
+    }
+
+    private IEnumerable<MachineStatus> GetFilteredMachineStatuses()
+    {
+        if (machineStatuses == null) return Enumerable.Empty<MachineStatus>();
+
+        var filtered = machineStatuses.AsEnumerable();
+
+        // Filter by selected group
+        if (selectedGroupId.HasValue)
+        {
+            filtered = filtered.Where(status =>
+            {
+                var machine = machines.FirstOrDefault(m => m.Id == status.MachineId);
+                return machine != null && (machine.GroupId == selectedGroupId.Value ||
+                    machine.Groups.Any(g => g.Id == selectedGroupId.Value));
+            });
+        }
+
+        // Filter by search term
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var search = searchTerm.ToLower();
+            filtered = filtered.Where(status =>
+            {
+                var machine = machines.FirstOrDefault(m => m.Id == status.MachineId);
+                if (machine == null) return false;
+
+                return machine.MachineId.ToLower().Contains(search) ||
+                    machine.IpAddress.ToLower().Contains(search) ||
+                    (machine.Group?.Name.ToLower().Contains(search) ?? false) ||
+                    machine.Groups.Any(g => g.Name.ToLower().Contains(search));
+            });
+        }
+
+        return filtered;
+    }
+
+    private void FilterByGroup(int groupId)
+    {
+        selectedGroupId = groupId;
+        searchTerm = string.Empty;
+    }
+
+    private void ClearGroupFilter()
+    {
+        selectedGroupId = null;
+    }
+
+    private void ClearSearch()
+    {
+        searchTerm = string.Empty;
     }
 
     private async Task RefreshAll()
@@ -545,6 +756,597 @@ else
         // Pi will be offline during power cycle, wait 30 seconds before refresh
         await Task.Delay(30000);
         await RefreshAll();
+    }
+
+    private async Task PowerDownViaPOE(Machine machine)
+    {
+        if (string.IsNullOrEmpty(machine.PoESwitchIp) || !machine.PoESwitchPort.HasValue)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "PoE switch configuration is missing for this machine.");
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power down {machine.MachineId} via PoE switch? This will cut power to the Raspberry Pi."
+        );
+
+        if (!confirmed) return;
+
+        var (success, error) = await PoESwitchClient.DisablePortAsync(
+            machine.PoESwitchIp,
+            machine.PoESwitchPort.Value
+        );
+
+        DbContext.CommandHistory.Add(new CommandHistory
+        {
+            MachineId = machine.Id,
+            Command = $"poe: power down (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+            Success = success,
+            Error = error
+        });
+        await DbContext.SaveChangesAsync();
+
+        if (!success)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Power down failed: {error}");
+        }
+
+        await Task.Delay(5000);
+        await RefreshAll();
+    }
+
+    private async Task PowerOnViaPOE(Machine machine)
+    {
+        if (string.IsNullOrEmpty(machine.PoESwitchIp) || !machine.PoESwitchPort.HasValue)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", "PoE switch configuration is missing for this machine.");
+            return;
+        }
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power on {machine.MachineId} via PoE switch? This will restore power to the Raspberry Pi."
+        );
+
+        if (!confirmed) return;
+
+        var (success, error) = await PoESwitchClient.EnablePortAsync(
+            machine.PoESwitchIp,
+            machine.PoESwitchPort.Value
+        );
+
+        DbContext.CommandHistory.Add(new CommandHistory
+        {
+            MachineId = machine.Id,
+            Command = $"poe: power on (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+            Success = success,
+            Error = error
+        });
+        await DbContext.SaveChangesAsync();
+
+        if (!success)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Power on failed: {error}");
+        }
+
+        await Task.Delay(30000);
+        await RefreshAll();
+    }
+
+    private async Task BulkPoEPowerCycle()
+    {
+        var poeMachines = machines.Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+
+        if (!poeMachines.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power cycle {poeMachines.Count} machine(s) via PoE? All machines will be power cycled."
+        );
+
+        if (!confirmed) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = poeMachines.Select(async machine =>
+            {
+                var (success, error) = await PoESwitchClient.PowerCyclePortAsync(
+                    machine.PoESwitchIp!,
+                    machine.PoESwitchPort!.Value,
+                    waitSeconds: 3
+                );
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = $"poe: power cycle all (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+                    Success = success,
+                    Error = error
+                });
+                return (machine, success, error);
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(30000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkPoEPowerDown()
+    {
+        var poeMachines = machines.Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+
+        if (!poeMachines.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power down {poeMachines.Count} machine(s) via PoE? All machines will be powered off."
+        );
+
+        if (!confirmed) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = poeMachines.Select(async machine =>
+            {
+                var (success, error) = await PoESwitchClient.DisablePortAsync(
+                    machine.PoESwitchIp!,
+                    machine.PoESwitchPort!.Value
+                );
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = $"poe: power down all (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+                    Success = success,
+                    Error = error
+                });
+                return (machine, success, error);
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(5000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkPoEPowerOn()
+    {
+        var poeMachines = machines.Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+
+        if (!poeMachines.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power on {poeMachines.Count} machine(s) via PoE? All machines will be powered on."
+        );
+
+        if (!confirmed) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = poeMachines.Select(async machine =>
+            {
+                var (success, error) = await PoESwitchClient.EnablePortAsync(
+                    machine.PoESwitchIp!,
+                    machine.PoESwitchPort!.Value
+                );
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = $"poe: power on all (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+                    Success = success,
+                    Error = error
+                });
+                return (machine, success, error);
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(30000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkPoEPowerCycleGroup(int groupId)
+    {
+        var groupMachines = machines.Where(m => m.GroupId == groupId && !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+
+        if (!groupMachines.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power cycle {groupMachines.Count} machine(s) in this group via PoE?"
+        );
+
+        if (!confirmed) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = groupMachines.Select(async machine =>
+            {
+                var (success, error) = await PoESwitchClient.PowerCyclePortAsync(
+                    machine.PoESwitchIp!,
+                    machine.PoESwitchPort!.Value,
+                    waitSeconds: 3
+                );
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = $"poe: power cycle group (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+                    Success = success,
+                    Error = error
+                });
+                return (machine, success, error);
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(30000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkPoEPowerDownGroup(int groupId)
+    {
+        var groupMachines = machines.Where(m => m.GroupId == groupId && !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+
+        if (!groupMachines.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power down {groupMachines.Count} machine(s) in this group via PoE?"
+        );
+
+        if (!confirmed) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = groupMachines.Select(async machine =>
+            {
+                var (success, error) = await PoESwitchClient.DisablePortAsync(
+                    machine.PoESwitchIp!,
+                    machine.PoESwitchPort!.Value
+                );
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = $"poe: power down group (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+                    Success = success,
+                    Error = error
+                });
+                return (machine, success, error);
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(5000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkPoEPowerOnGroup(int groupId)
+    {
+        var groupMachines = machines.Where(m => m.GroupId == groupId && !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+
+        if (!groupMachines.Any()) return;
+
+        var confirmed = await JSRuntime.InvokeAsync<bool>(
+            "confirm",
+            $"Power on {groupMachines.Count} machine(s) in this group via PoE?"
+        );
+
+        if (!confirmed) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = groupMachines.Select(async machine =>
+            {
+                var (success, error) = await PoESwitchClient.EnablePortAsync(
+                    machine.PoESwitchIp!,
+                    machine.PoESwitchPort!.Value
+                );
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = $"poe: power on group (switch={machine.PoESwitchIp}, port={machine.PoESwitchPort})",
+                    Success = success,
+                    Error = error
+                });
+                return (machine, success, error);
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(30000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkStartAll()
+    {
+        var onlineMachines = machines
+            .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
+            .ToList();
+
+        if (!onlineMachines.Any()) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = onlineMachines.Select(async machine =>
+            {
+                var (success, error) = await SupervisorClient.StartServiceAsync(machine);
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = "start (all)",
+                    Success = success,
+                    Error = error
+                });
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkRestartAll()
+    {
+        var onlineMachines = machines
+            .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
+            .ToList();
+
+        if (!onlineMachines.Any()) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = onlineMachines.Select(async machine =>
+            {
+                var (success, error) = await SupervisorClient.RestartServiceAsync(machine);
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = "restart (all)",
+                    Success = success,
+                    Error = error
+                });
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkStopAll()
+    {
+        var onlineMachines = machines
+            .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
+            .ToList();
+
+        if (!onlineMachines.Any()) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = onlineMachines.Select(async machine =>
+            {
+                var (success, error) = await SupervisorClient.StopServiceAsync(machine);
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = "stop (all)",
+                    Success = success,
+                    Error = error
+                });
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkStartGroup(int groupId)
+    {
+        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var onlineMachines = groupMachines
+            .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
+            .ToList();
+
+        if (!onlineMachines.Any()) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = onlineMachines.Select(async machine =>
+            {
+                var (success, error) = await SupervisorClient.StartServiceAsync(machine);
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = "start (group)",
+                    Success = success,
+                    Error = error
+                });
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkRestartGroup(int groupId)
+    {
+        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var onlineMachines = groupMachines
+            .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
+            .ToList();
+
+        if (!onlineMachines.Any()) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = onlineMachines.Select(async machine =>
+            {
+                var (success, error) = await SupervisorClient.RestartServiceAsync(machine);
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = "restart (group)",
+                    Success = success,
+                    Error = error
+                });
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task BulkStopGroup(int groupId)
+    {
+        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var onlineMachines = groupMachines
+            .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
+            .ToList();
+
+        if (!onlineMachines.Any()) return;
+
+        isBulkOperating = true;
+        StateHasChanged();
+
+        try
+        {
+            var tasks = onlineMachines.Select(async machine =>
+            {
+                var (success, error) = await SupervisorClient.StopServiceAsync(machine);
+                DbContext.CommandHistory.Add(new CommandHistory
+                {
+                    MachineId = machine.Id,
+                    Command = "stop (group)",
+                    Success = success,
+                    Error = error
+                });
+            });
+
+            await Task.WhenAll(tasks);
+            await DbContext.SaveChangesAsync();
+
+            await Task.Delay(1000);
+            await RefreshAll();
+        }
+        finally
+        {
+            isBulkOperating = false;
+            StateHasChanged();
+        }
     }
 
     private async Task BulkRebootGroup(int groupId)

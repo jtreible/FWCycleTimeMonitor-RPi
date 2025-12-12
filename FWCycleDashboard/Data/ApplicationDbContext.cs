@@ -17,11 +17,18 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
+        // Legacy single group relationship
         modelBuilder.Entity<Machine>()
             .HasOne(m => m.Group)
             .WithMany(g => g.Machines)
             .HasForeignKey(m => m.GroupId)
             .OnDelete(DeleteBehavior.SetNull);
+
+        // Many-to-many relationship between Machines and Groups
+        modelBuilder.Entity<Machine>()
+            .HasMany(m => m.Groups)
+            .WithMany()
+            .UsingEntity(j => j.ToTable("MachineGroupMembership"));
 
         modelBuilder.Entity<CommandHistory>()
             .HasOne(ch => ch.Machine)

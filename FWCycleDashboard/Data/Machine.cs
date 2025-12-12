@@ -27,8 +27,12 @@ public class Machine
     [StringLength(500)]
     public string? Description { get; set; }
 
+    // Legacy single group (kept for backward compatibility)
     public int? GroupId { get; set; }
     public MachineGroup? Group { get; set; }
+
+    // Many-to-many relationship with groups
+    public ICollection<MachineGroup> Groups { get; set; } = new List<MachineGroup>();
 
     public bool UseHttps { get; set; } = false;
 
