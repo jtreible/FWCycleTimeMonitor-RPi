@@ -155,7 +155,7 @@ else
         <div class="row mb-4">
             @foreach (var group in groups)
             {
-                var groupMachines = machines.Where(m => m.GroupId == group.Id).ToList();
+                var groupMachines = GetMachinesInGroup(group.Id);
                 var onlineCount = groupMachines.Count(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true);
                 <div class="col-md-4 col-lg-3 mb-3">
                     <div class="card border-primary group-tile">
@@ -978,7 +978,9 @@ else
 
     private async Task BulkPoEPowerCycleGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId && !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+        var groupMachines = GetMachinesInGroup(groupId)
+            .Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue)
+            .ToList();
 
         if (!groupMachines.Any()) return;
 
@@ -1026,7 +1028,9 @@ else
 
     private async Task BulkPoEPowerDownGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId && !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+        var groupMachines = GetMachinesInGroup(groupId)
+            .Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue)
+            .ToList();
 
         if (!groupMachines.Any()) return;
 
@@ -1073,7 +1077,9 @@ else
 
     private async Task BulkPoEPowerOnGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId && !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue).ToList();
+        var groupMachines = GetMachinesInGroup(groupId)
+            .Where(m => !string.IsNullOrEmpty(m.PoESwitchIp) && m.PoESwitchPort.HasValue)
+            .ToList();
 
         if (!groupMachines.Any()) return;
 
@@ -1234,7 +1240,7 @@ else
 
     private async Task BulkStartGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var groupMachines = GetMachinesInGroup(groupId);
         var onlineMachines = groupMachines
             .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
             .ToList();
@@ -1273,7 +1279,7 @@ else
 
     private async Task BulkRestartGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var groupMachines = GetMachinesInGroup(groupId);
         var onlineMachines = groupMachines
             .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
             .ToList();
@@ -1312,7 +1318,7 @@ else
 
     private async Task BulkStopGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var groupMachines = GetMachinesInGroup(groupId);
         var onlineMachines = groupMachines
             .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
             .ToList();
@@ -1351,7 +1357,7 @@ else
 
     private async Task BulkRebootGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var groupMachines = GetMachinesInGroup(groupId);
         var onlineMachines = groupMachines
             .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
             .ToList();
@@ -1402,7 +1408,7 @@ else
 
     private async Task BulkStackLightGroup(int groupId, bool green, bool amber, bool red)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var groupMachines = GetMachinesInGroup(groupId);
         var onlineMachines = groupMachines
             .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
             .ToList();
@@ -1442,7 +1448,7 @@ else
 
     private async Task BulkTestStackLightGroup(int groupId)
     {
-        var groupMachines = machines.Where(m => m.GroupId == groupId).ToList();
+        var groupMachines = GetMachinesInGroup(groupId);
         var onlineMachines = groupMachines
             .Where(m => machineStatuses?.FirstOrDefault(s => s.MachineId == m.Id)?.IsOnline == true)
             .ToList();
@@ -1482,6 +1488,15 @@ else
             currentBulkGroupId = null;
             StateHasChanged();
         }
+    }
+
+    // Helper method to get all machines in a group (from both legacy and many-to-many relationships)
+    private List<Machine> GetMachinesInGroup(int groupId)
+    {
+        return machines
+            .Where(m => m.GroupId == groupId || m.Groups.Any(g => g.Id == groupId))
+            .Distinct()
+            .ToList();
     }
 
     public void Dispose()

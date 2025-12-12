@@ -27,7 +27,7 @@ public class ApplicationDbContext : DbContext
         // Many-to-many relationship between Machines and Groups
         modelBuilder.Entity<Machine>()
             .HasMany(m => m.Groups)
-            .WithMany()
+            .WithMany(g => g.MachinesInGroup)
             .UsingEntity(j => j.ToTable("MachineGroupMembership"));
 
         modelBuilder.Entity<CommandHistory>()

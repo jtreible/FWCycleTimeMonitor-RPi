@@ -31,7 +31,7 @@
                     <th>Machine ID</th>
                     <th>IP Address</th>
                     <th>Port</th>
-                    <th>Group</th>
+                    <th>Groups</th>
                     <th>Location</th>
                     <th>Last Seen</th>
                     <th>Actions</th>
@@ -44,7 +44,21 @@
                         <td>@machine.MachineId</td>
                         <td>@machine.IpAddress</td>
                         <td>@machine.Port</td>
-                        <td>@(machine.Group?.Name ?? "-")</td>
+                        <td>
+                            @{
+                                var allGroups = new List<MachineGroup>();
+                                if (machine.Group != null) allGroups.Add(machine.Group);
+                                allGroups.AddRange(machine.Groups.Where(g => machine.GroupId == null || g.Id != machine.GroupId));
+                            }
+                            @if (allGroups.Any())
+                            {
+                                @string.Join(", ", allGroups.Select(g => g.Name))
+                            }
+                            else
+                            {
+                                <span class="text-muted">-</span>
+                            }
+                        </td>
                         <td>@(machine.Location ?? "-")</td>
                         <td>
                             @if (machine.LastSeenAt.HasValue)
@@ -99,14 +113,26 @@
                         <input type="text" class="form-control" @bind="editingMachine.ApiKey" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Group</label>
-                        <select class="form-select" @bind="editingMachine.GroupId">
-                            <option value="">-- No Group --</option>
+                        <label class="form-label">Groups (select one or more)</label>
+                        <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;">
                             @foreach (var group in groups)
                             {
-                                <option value="@group.Id">@group.Name</option>
+                                <div class="form-check">
+                                    <input type="checkbox"
+                                           class="form-check-input"
+                                           id="group_@group.Id"
+                                           checked="@selectedGroupIds.Contains(group.Id)"
+                                           @onchange="@((e) => ToggleGroup(group.Id, (bool)(e.Value ?? false)))" />
+                                    <label class="form-check-label" for="group_@group.Id">
+                                        @group.Name
+                                    </label>
+                                </div>
                             }
-                        </select>
+                            @if (!groups.Any())
+                            {
+                                <small class="text-muted">No groups available. Create groups first.</small>
+                            }
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Location (optional)</label>
@@ -148,6 +174,7 @@
     private List<MachineGroup> groups = new();
     private bool showModal = false;
     private Machine editingMachine = new();
+    private HashSet<int> selectedGroupIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -158,6 +185,7 @@
     {
         machines = await DbContext.Machines
             .Include(m => m.Group)
+            .Include(m => m.Groups)
             .OrderBy(m => m.MachineId)
             .ToListAsync();
 
@@ -169,6 +197,7 @@
     private void ShowAddMachine()
     {
         editingMachine = new Machine { Port = 8443 };
+        selectedGroupIds.Clear();
         showModal = true;
     }
 
@@ -188,31 +217,87 @@
             PoESwitchIp = machine.PoESwitchIp,
             PoESwitchPort = machine.PoESwitchPort
         };
+
+        // Load selected groups
+        selectedGroupIds.Clear();
+        if (machine.GroupId.HasValue)
+            selectedGroupIds.Add(machine.GroupId.Value);
+        foreach (var group in machine.Groups)
+        {
+            selectedGroupIds.Add(group.Id);
+        }
+
         showModal = true;
+    }
+
+    private void ToggleGroup(int groupId, bool isChecked)
+    {
+        if (isChecked)
+        {
+            selectedGroupIds.Add(groupId);
+        }
+        else
+        {
+            selectedGroupIds.Remove(groupId);
+        }
     }
 
     private async Task SaveMachine()
     {
         if (editingMachine.Id == 0)
         {
+            // New machine
             DbContext.Machines.Add(editingMachine);
+            await DbContext.SaveChangesAsync();
+
+            // Add selected groups
+            var machine = await DbContext.Machines
+                .Include(m => m.Groups)
+                .FirstAsync(m => m.Id == editingMachine.Id);
+
+            var selectedGroups = await DbContext.MachineGroups
+                .Where(g => selectedGroupIds.Contains(g.Id))
+                .ToListAsync();
+
+            machine.Groups.Clear();
+            foreach (var group in selectedGroups)
+            {
+                machine.Groups.Add(group);
+            }
+
+            // Set primary group to first selected group (for backward compatibility)
+            machine.GroupId = selectedGroupIds.FirstOrDefault();
         }
         else
         {
-            var existing = await DbContext.Machines.FindAsync(editingMachine.Id);
-            if (existing != null)
+            // Existing machine
+            var existing = await DbContext.Machines
+                .Include(m => m.Groups)
+                .FirstAsync(m => m.Id == editingMachine.Id);
+
+            existing.MachineId = editingMachine.MachineId;
+            existing.IpAddress = editingMachine.IpAddress;
+            existing.Port = editingMachine.Port;
+            existing.ApiKey = editingMachine.ApiKey;
+            existing.Location = editingMachine.Location;
+            existing.Description = editingMachine.Description;
+            existing.UseHttps = editingMachine.UseHttps;
+            existing.PoESwitchIp = editingMachine.PoESwitchIp;
+            existing.PoESwitchPort = editingMachine.PoESwitchPort;
+
+            // Update groups
+            var selectedGroups = await DbContext.MachineGroups
+                .Where(g => selectedGroupIds.Contains(g.Id))
+                .ToListAsync();
+
+            existing.Groups.Clear();
+            foreach (var group in selectedGroups)
             {
-                existing.MachineId = editingMachine.MachineId;
-                existing.IpAddress = editingMachine.IpAddress;
-                existing.Port = editingMachine.Port;
-                existing.ApiKey = editingMachine.ApiKey;
-                existing.GroupId = editingMachine.GroupId;
-                existing.Location = editingMachine.Location;
-                existing.Description = editingMachine.Description;
-                existing.UseHttps = editingMachine.UseHttps;
-                existing.PoESwitchIp = editingMachine.PoESwitchIp;
-                existing.PoESwitchPort = editingMachine.PoESwitchPort;
+                existing.Groups.Add(group);
             }
+
+            // Set primary group to first selected group (for backward compatibility)
+            existing.GroupId = selectedGroupIds.FirstOrDefault();
         }
 
         await DbContext.SaveChangesAsync();

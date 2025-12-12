@@ -15,5 +15,9 @@ public class MachineGroup
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    // Legacy single-group relationship (backward compatibility)
     public ICollection<Machine> Machines { get; set; } = new List<Machine>();
+
+    // Many-to-many relationship with machines
+    public ICollection<Machine> MachinesInGroup { get; set; } = new List<Machine>();
 }

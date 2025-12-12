@@ -54,11 +54,19 @@
                     {
                         <p class="text-muted">@group.Description</p>
                     }
-                    @if (group.Machines.Any())
+                    @{
+                        // Combine machines from both legacy and many-to-many relationships
+                        var allMachines = group.Machines
+                            .Concat(group.MachinesInGroup)
+                            .DistinctBy(m => m.Id)
+                            .OrderBy(m => m.MachineId)
+                            .ToList();
+                    }
+                    @if (allMachines.Any())
                     {
                         <p><strong>Machines in this group:</strong></p>
                         <ul>
-                            @foreach (var machine in group.Machines)
+                            @foreach (var machine in allMachines)
                             {
                                 <li>@machine.MachineId (@machine.IpAddress)</li>
                             }
@@ -117,6 +125,7 @@
     {
         groups = await DbContext.MachineGroups
             .Include(g => g.Machines)
+            .Include(g => g.MachinesInGroup)
             .OrderBy(g => g.Name)
             .ToListAsync();
     }
@@ -171,9 +180,20 @@
 
     private async Task ExecuteGroupCommand(MachineGroup group, string command)
     {
-        var machines = await DbContext.Machines
+        // Get machines from both legacy single-group and many-to-many relationships
+        var legacyMachines = await DbContext.Machines
             .Where(m => m.GroupId == group.Id)
             .ToListAsync();
+
+        var manyToManyMachines = await DbContext.Machines
+            .Include(m => m.Groups)
+            .Where(m => m.Groups.Any(g => g.Id == group.Id))
+            .ToListAsync();
+
+        var machines = legacyMachines
+            .Concat(manyToManyMachines)
+            .DistinctBy(m => m.Id)
+            .ToList();
 
         foreach (var machine in machines)
         {
