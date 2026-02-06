@@ -12,6 +12,7 @@ import uvicorn
 
 from . import settings
 from .api import app
+from ..gpio_fix import ensure_gpio_compatibility
 from ..updater import determine_repo_path, sync_environment, update_repository
 
 LOGGER = logging.getLogger(__name__)
@@ -49,6 +50,11 @@ def main(argv: Optional[list[str]] = None) -> None:
             LOGGER.warning(
                 "Failed to refresh installed package; the remote supervisor may run with stale dependencies"
             )
+
+    # Ensure GPIO compatibility on Debian 13
+    venv_path = repo_path / ".venv"
+    if not ensure_gpio_compatibility(venv_path):
+        LOGGER.warning("GPIO compatibility fix failed; monitor control may not work correctly")
 
     if args.reload_settings:
         LOGGER.info("Reloading supervisor settings before launch")

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import AppConfig, load_config
+from .gpio_fix import ensure_gpio_compatibility
 from .gpio_monitor import CycleMonitor, GPIOUnavailableError
 from .updater import determine_repo_path, sync_environment, update_repository
 
@@ -65,6 +66,11 @@ def main() -> int:
     )
 
     _refresh_code()
+
+    # Ensure GPIO compatibility on Debian 13
+    venv_path = Path(__file__).resolve().parents[2] / ".venv"
+    if not ensure_gpio_compatibility(venv_path):
+        LOGGER.warning("GPIO compatibility fix failed; service may not start correctly")
 
     config = load_config()
     LOGGER.info("Loaded configuration: %s", _summarize_config(config))
