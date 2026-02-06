@@ -4,7 +4,9 @@ These scripts fix RPi.GPIO compatibility issues on Debian 13 (Trixie) for the FW
 
 ## The Problem
 
-Debian 13 uses a modern GPIO character device interface that's incompatible with RPi.GPIO 0.7.1 (from PyPI). The system package RPi.GPIO 0.7.2 has the necessary fixes, but Python virtual environments default to the PyPI version.
+Debian 13 uses a modern GPIO character device interface (`/dev/gpiochip*`) that's incompatible with the older RPi.GPIO library. The PyPI version (0.7.1) and even Debian's python3-rpi.gpio package (0.7.1a4) don't work properly with the newer kernels.
+
+**Solution**: Use `python3-rpi-lgpio` - a compatibility shim that implements the RPi.GPIO API but uses the modern lgpio backend underneath.
 
 **Symptom**: `RuntimeError: Failed to add edge detection` when the service tries to start.
 
@@ -176,14 +178,15 @@ sudo journalctl -u fw-cycle-monitor.service -n 100
 
 **Why this happens**:
 - Debian 13 uses the modern GPIO character device API (`/dev/gpiochip*`)
-- RPi.GPIO 0.7.1 (PyPI) doesn't fully support this on newer kernels
-- System package 0.7.2 includes Debian-specific patches
+- RPi.GPIO 0.7.1 (PyPI) and python3-rpi.gpio (Debian) don't work with edge detection on modern kernels
+- python3-rpi-lgpio is a compatibility shim that implements RPi.GPIO API using the modern lgpio backend
 - Virtual environments isolate packages, preventing access to system version
 
 **The fix**:
-- Removes PyPI version from venv
+- Installs python3-rpi-lgpio system package (compatibility shim)
+- Removes any RPi.GPIO from venv
 - Adds system site-packages to venv search path
-- Python finds and uses the working system version
+- Python finds and uses the lgpio-based compatibility shim
 
 **Why auto-fix on boot**:
 - Some update processes might reinstall the PyPI version

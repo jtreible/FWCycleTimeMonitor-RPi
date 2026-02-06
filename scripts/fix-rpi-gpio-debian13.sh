@@ -30,14 +30,21 @@ if [ -f /etc/os-release ]; then
     fi
 fi
 
-# Step 1: Install system RPi.GPIO if not present
-echo "[1/4] Checking system RPi.GPIO package..."
-if ! dpkg -l | grep -q "python3-rpi.gpio"; then
-    echo "Installing python3-rpi.gpio system package..."
+# Step 1: Install system rpi-lgpio compatibility shim
+echo "[1/4] Checking system rpi-lgpio package..."
+# Ensure python3-rpi.gpio is NOT installed (it's incompatible)
+if dpkg -l | grep -q "python3-rpi.gpio"; then
+    echo "Removing incompatible python3-rpi.gpio package..."
+    sudo apt-get remove -y python3-rpi.gpio
+fi
+
+# Install the lgpio-based compatibility shim
+if ! dpkg -l | grep -q "python3-rpi-lgpio"; then
+    echo "Installing python3-rpi-lgpio compatibility shim..."
     sudo apt-get update
-    sudo apt-get install -y python3-rpi.gpio
+    sudo apt-get install -y python3-rpi-lgpio python3-lgpio
 else
-    echo "✓ System RPi.GPIO package already installed"
+    echo "✓ System rpi-lgpio package already installed"
 fi
 
 # Step 2: Remove RPi.GPIO from venv
@@ -65,10 +72,10 @@ if [ -d "$VENV_PATH" ]; then
     echo "✓ Created system-packages.pth"
 
     # Verify the fix
-    if $VENV_PATH/bin/python -c "import RPi.GPIO; assert RPi.GPIO.VERSION == '0.7.2'" 2>/dev/null; then
-        echo "✓ Venv now using RPi.GPIO 0.7.2"
+    if $VENV_PATH/bin/python -c "import RPi.GPIO; print(f'Using RPi.GPIO {RPi.GPIO.VERSION} from {RPi.GPIO.__file__}')" 2>/dev/null | grep -q "dist-packages"; then
+        echo "✓ Venv now using system RPi.GPIO package"
     else
-        echo "Warning: Could not verify RPi.GPIO 0.7.2 in venv"
+        echo "Warning: Could not verify system RPi.GPIO in venv"
     fi
 fi
 
