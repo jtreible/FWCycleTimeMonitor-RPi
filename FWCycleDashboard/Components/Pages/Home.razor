@@ -517,6 +517,28 @@ else
         }
     }
 
+    private async Task RefreshSingle(Machine machine)
+    {
+        var updated = await SupervisorClient.GetFullStatusAsync(machine);
+        if (machineStatuses != null)
+        {
+            var index = machineStatuses.FindIndex(s => s.MachineId == machine.Id);
+            if (index >= 0)
+                machineStatuses[index] = updated;
+            else
+                machineStatuses.Add(updated);
+        }
+
+        if (updated.IsOnline)
+        {
+            machine.LastSeenAt = DateTime.UtcNow;
+            machine.LastStatus = updated.Status?.ActiveState;
+            await DbContext.SaveChangesAsync();
+        }
+
+        StateHasChanged();
+    }
+
     private async Task StartService(Machine machine)
     {
         var (success, error) = await SupervisorClient.StartServiceAsync(machine);
@@ -531,7 +553,7 @@ else
         await DbContext.SaveChangesAsync();
 
         await Task.Delay(1000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task StopService(Machine machine)
@@ -548,7 +570,7 @@ else
         await DbContext.SaveChangesAsync();
 
         await Task.Delay(1000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task RestartService(Machine machine)
@@ -565,7 +587,7 @@ else
         await DbContext.SaveChangesAsync();
 
         await Task.Delay(1000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private string GetCardClass(MachineStatus status)
@@ -620,7 +642,7 @@ else
         await DbContext.SaveChangesAsync();
 
         await Task.Delay(500);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task TestStackLight(Machine machine)
@@ -638,7 +660,7 @@ else
 
         // Wait for test sequence to complete (8 seconds) plus buffer
         await Task.Delay(9000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task TurnOffStackLight(Machine machine)
@@ -655,7 +677,7 @@ else
         await DbContext.SaveChangesAsync();
 
         await Task.Delay(500);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private string FormatTimestamp(string? timestamp)
@@ -715,7 +737,7 @@ else
 
         // Pi will be offline during reboot, wait 30 seconds before refresh
         await Task.Delay(30000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task PowerCycleViaPOE(Machine machine)
@@ -755,7 +777,7 @@ else
 
         // Pi will be offline during power cycle, wait 30 seconds before refresh
         await Task.Delay(30000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task PowerDownViaPOE(Machine machine)
@@ -793,7 +815,7 @@ else
         }
 
         await Task.Delay(5000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task PowerOnViaPOE(Machine machine)
@@ -831,7 +853,7 @@ else
         }
 
         await Task.Delay(30000);
-        await RefreshAll();
+        await RefreshSingle(machine);
     }
 
     private async Task BulkPoEPowerCycle()

@@ -11,6 +11,16 @@ from .settings import get_settings
 
 LOGGER = logging.getLogger(__name__)
 
+# Mapping of common timezone abbreviations to UTC offset strings.
+# Python's strptime %Z is unreliable for abbreviations like "EST".
+_TZ_OFFSETS = {
+    "EST": "-0500", "EDT": "-0400",
+    "CST": "-0600", "CDT": "-0500",
+    "MST": "-0700", "MDT": "-0600",
+    "PST": "-0800", "PDT": "-0700",
+    "UTC": "+0000", "GMT": "+0000",
+}
+
 STATUS_PROPERTIES = (
     "Id",
     "Names",
@@ -52,6 +62,12 @@ class ServiceStatus(dict):
         if not timestamp:
             return None
         try:
+            # Replace timezone abbreviation with numeric offset for reliable parsing.
+            # systemctl returns e.g. "Thu 2026-02-06 13:08:34 EST"
+            parts = timestamp.rsplit(" ", 1)
+            if len(parts) == 2 and parts[1] in _TZ_OFFSETS:
+                timestamp = parts[0] + " " + _TZ_OFFSETS[parts[1]]
+                return datetime.strptime(timestamp, "%a %Y-%m-%d %H:%M:%S %z")
             return datetime.strptime(timestamp, "%a %Y-%m-%d %H:%M:%S %Z")
         except ValueError:
             return None

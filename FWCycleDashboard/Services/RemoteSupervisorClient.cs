@@ -280,10 +280,17 @@ public class RemoteSupervisorClient
 
         try
         {
-            status.Status = await GetStatusAsync(machine);
-            status.Config = await GetConfigAsync(machine);
-            status.Metrics = await GetMetricsAsync(machine);
-            status.StackLight = await GetStackLightStatusAsync(machine);
+            var statusTask = GetStatusAsync(machine);
+            var configTask = GetConfigAsync(machine);
+            var metricsTask = GetMetricsAsync(machine);
+            var stackLightTask = GetStackLightStatusAsync(machine);
+
+            await Task.WhenAll(statusTask, configTask, metricsTask, stackLightTask);
+
+            status.Status = statusTask.Result;
+            status.Config = configTask.Result;
+            status.Metrics = metricsTask.Result;
+            status.StackLight = stackLightTask.Result;
             status.IsOnline = status.Status != null;
         }
         catch (Exception ex)
