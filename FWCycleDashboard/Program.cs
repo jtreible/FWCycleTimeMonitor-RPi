@@ -71,8 +71,70 @@ if (!app.Environment.IsDevelopment())
 
 app.UseAntiforgery();
 
+// API endpoint for RPi self-registration on boot
+app.MapPost("/api/machines/register", async (
+    MachineRegistrationRequest request,
+    ApplicationDbContext db,
+    ILogger<Program> logger) =>
+{
+    if (string.IsNullOrWhiteSpace(request.MachineId) ||
+        string.IsNullOrWhiteSpace(request.IpAddress) ||
+        string.IsNullOrWhiteSpace(request.ApiKey))
+    {
+        return Results.BadRequest(new { error = "machineId, ipAddress, and apiKey are required" });
+    }
+
+    var normalizedId = request.MachineId.Trim().ToUpper();
+    var machine = await db.Machines
+        .FirstOrDefaultAsync(m => m.MachineId == normalizedId);
+
+    if (machine == null)
+    {
+        logger.LogWarning("Registration from unknown machine: {MachineId}", normalizedId);
+        return Results.NotFound(new { error = $"Machine '{normalizedId}' not found" });
+    }
+
+    if (machine.ApiKey != request.ApiKey)
+    {
+        logger.LogWarning("Registration with invalid API key from machine: {MachineId}", normalizedId);
+        return Results.Json(new { error = "Invalid API key" }, statusCode: 403);
+    }
+
+    var previousIp = machine.IpAddress;
+    machine.IpAddress = request.IpAddress;
+    machine.Port = request.Port;
+    machine.LastSeenAt = DateTime.UtcNow;
+    await db.SaveChangesAsync();
+
+    if (previousIp != request.IpAddress)
+    {
+        logger.LogInformation("Machine {MachineId} IP updated: {OldIp} -> {NewIp}",
+            normalizedId, previousIp, request.IpAddress);
+    }
+    else
+    {
+        logger.LogInformation("Machine {MachineId} registered at {Ip}:{Port}",
+            normalizedId, request.IpAddress, request.Port);
+    }
+
+    return Results.Ok(new
+    {
+        status = "registered",
+        machine_id = machine.MachineId,
+        ip_address = machine.IpAddress,
+        port = machine.Port
+    });
+});
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+public record MachineRegistrationRequest(
+    string MachineId,
+    string IpAddress,
+    int Port,
+    string ApiKey
+);

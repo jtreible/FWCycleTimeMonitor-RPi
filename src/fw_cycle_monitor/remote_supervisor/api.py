@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, Optional
 
@@ -22,6 +23,7 @@ from .models import (
 )
 from .service_control import ServiceCommandError, restart_service, start_service, status_summary, stop_service
 from .settings import get_settings, refresh_settings
+from .registration import register_in_background
 from .stacklight_controller import StackLightController
 
 LOGGER = logging.getLogger(__name__)
@@ -295,6 +297,9 @@ async def startup_event():
                 LOGGER.warning(f"Stack light startup self-test failed: {result.get('error')}")
         except Exception as e:
             LOGGER.error(f"Failed to run stack light startup self-test: {e}", exc_info=True)
+
+    # Register with dashboard in the background (fire-and-forget)
+    asyncio.create_task(register_in_background())
 
 
 @app.on_event("shutdown")

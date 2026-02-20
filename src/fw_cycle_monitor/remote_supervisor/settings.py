@@ -49,6 +49,7 @@ class RemoteSupervisorSettings:
     keyfile: Optional[Path] = None
     ca_bundle: Optional[Path] = None
     metrics_enabled: bool = True
+    dashboard_url: Optional[str] = "http://192.168.0.248:8085"
     stacklight: StackLightSettings = field(default_factory=StackLightSettings)
 
     def __post_init__(self) -> None:
@@ -126,6 +127,10 @@ def load_settings() -> RemoteSupervisorSettings:
     metrics_enabled = os.getenv("FW_REMOTE_SUPERVISOR_METRICS_ENABLED")
     if metrics_enabled is not None:
         payload["metrics_enabled"] = metrics_enabled.lower() not in {"0", "false", "no"}
+
+    dashboard_url = os.getenv("FW_REMOTE_SUPERVISOR_DASHBOARD_URL")
+    if dashboard_url:
+        payload["dashboard_url"] = dashboard_url
 
     # Handle stacklight settings
     if "stacklight" in payload and isinstance(payload["stacklight"], dict):

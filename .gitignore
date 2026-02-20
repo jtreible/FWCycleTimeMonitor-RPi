@@ -13,6 +13,9 @@ dist/
 [Oo]bj/
 [Dd]ebug/
 [Rr]elease/
+deploy/
+publish/
+publish-output/
 *.dll
 *.exe
 *.pdb
