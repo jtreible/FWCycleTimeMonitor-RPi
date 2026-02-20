@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,6 +11,8 @@ from threading import RLock
 from typing import List, Optional
 
 from ..config import CONFIG_DIR, ensure_config_dir
+
+LOGGER = logging.getLogger(__name__)
 
 SETTINGS_PATH = CONFIG_DIR / "remote_supervisor.json"
 _SETTINGS_CACHE: RemoteSupervisorSettings | None = None
@@ -165,3 +168,40 @@ def refresh_settings() -> RemoteSupervisorSettings:
     with _SETTINGS_LOCK:
         _SETTINGS_CACHE = load_settings()
         return _SETTINGS_CACHE
+
+
+def fix_supervisor_config() -> bool:
+    """Patch remote_supervisor.json on disk to fix common misconfigurations.
+
+    Fixes applied:
+    - ``host`` set to a specific IP instead of ``0.0.0.0`` (causes bind
+      failures when the IP changes).
+
+    Returns True if changes were written, False otherwise.
+    """
+    if not SETTINGS_PATH.exists():
+        return False
+
+    try:
+        data = json.loads(SETTINGS_PATH.read_text())
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    changed = False
+
+    # Fix host: should always be 0.0.0.0 to bind on all interfaces
+    host = data.get("host", "0.0.0.0")
+    if host not in ("0.0.0.0", "127.0.0.1", "localhost", "::"):
+        LOGGER.info("Fixing bind address in config: %s -> 0.0.0.0", host)
+        data["host"] = "0.0.0.0"
+        changed = True
+
+    if changed:
+        try:
+            SETTINGS_PATH.write_text(json.dumps(data, indent=2))
+            LOGGER.info("Updated %s", SETTINGS_PATH)
+        except OSError as exc:
+            LOGGER.warning("Failed to write config fix: %s", exc)
+            return False
+
+    return changed
