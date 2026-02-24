@@ -24,9 +24,9 @@ class StackLightSettings:
     """Stack light configuration.
 
     Default pins are for Waveshare 3-channel relay HAT:
-    - BCM 26 (Relay 1) → Green
+    - BCM 21 (Relay 3) → Green
     - BCM 20 (Relay 2) → Amber
-    - BCM 21 (Relay 3) → Red
+    - BCM 26 (Relay 1) → Red
 
     Note: Waveshare relay board is active LOW (LOW=ON, HIGH=OFF)
     """
@@ -35,9 +35,9 @@ class StackLightSettings:
     mock_mode: bool = False
     active_low: bool = True
     startup_self_test: bool = True
-    green_pin: int = 26
+    green_pin: int = 21
     amber_pin: int = 20
-    red_pin: int = 21
+    red_pin: int = 26
 
 
 @dataclass
@@ -143,9 +143,9 @@ def load_settings() -> RemoteSupervisorSettings:
             mock_mode=stacklight_data.get("mock_mode", False),
             active_low=stacklight_data.get("active_low", True),
             startup_self_test=stacklight_data.get("startup_self_test", True),
-            green_pin=stacklight_data.get("pins", {}).get("green", 26),
+            green_pin=stacklight_data.get("pins", {}).get("green", 21),
             amber_pin=stacklight_data.get("pins", {}).get("amber", 20),
-            red_pin=stacklight_data.get("pins", {}).get("red", 21),
+            red_pin=stacklight_data.get("pins", {}).get("red", 26),
         )
 
     return RemoteSupervisorSettings(**payload)
@@ -176,6 +176,8 @@ def fix_supervisor_config() -> bool:
     Fixes applied:
     - ``host`` set to a specific IP instead of ``0.0.0.0`` (causes bind
       failures when the IP changes).
+    - Swap green/red pins if they have the old incorrect values
+      (green=26, red=21 → green=21, red=26).
 
     Returns True if changes were written, False otherwise.
     """
@@ -194,6 +196,14 @@ def fix_supervisor_config() -> bool:
     if host not in ("0.0.0.0", "127.0.0.1", "localhost", "::"):
         LOGGER.info("Fixing bind address in config: %s -> 0.0.0.0", host)
         data["host"] = "0.0.0.0"
+        changed = True
+
+    # Fix swapped green/red pins (old: green=26, red=21 → new: green=21, red=26)
+    pins = data.get("stacklight", {}).get("pins", {})
+    if pins.get("green") == 26 and pins.get("red") == 21:
+        LOGGER.info("Fixing swapped green/red pins: green 26->21, red 21->26")
+        pins["green"] = 21
+        pins["red"] = 26
         changed = True
 
     if changed:

@@ -12,9 +12,9 @@
     "mock_mode": false,
     "active_low": true,
     "pins": {
-      "green": 26,
+      "green": 21,
       "amber": 20,
-      "red": 21
+      "red": 26
     }
   }
 }
