@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Dict, Any
@@ -26,6 +27,10 @@ class StackLightController:
         self.mock_mode = mock_mode
         self.active_low = active_low
         self.state = {"green": False, "amber": False, "red": False}
+        self._flashing = False
+        self._flash_interval: float = 0.5
+        self._flash_stop_event = threading.Event()
+        self._flash_thread: threading.Thread | None = None
         self.last_updated = None
         self.gpio = None
 
@@ -80,9 +85,18 @@ class StackLightController:
             LOGGER.warning("Falling back to mock mode")
             self.mock_mode = True
 
+    def _stop_flash_thread(self) -> None:
+        """Stop the flash background thread if running."""
+        if self._flash_thread is not None and self._flash_thread.is_alive():
+            self._flash_stop_event.set()
+            self._flash_thread.join(timeout=3.0)
+        self._flashing = False
+        self._flash_thread = None
+        self._flash_stop_event.clear()
+
     def set_light_state(self, green: bool, amber: bool, red: bool) -> Dict[str, Any]:
         """
-        Set the state of all three lights.
+        Set the state of all three lights.  Stops any active flash.
 
         Args:
             green: True to turn on green light
@@ -93,35 +107,14 @@ class StackLightController:
             Dictionary with success status and current state
         """
         try:
+            self._stop_flash_thread()
             self.state = {"green": green, "amber": amber, "red": red}
             self.last_updated = datetime.now(timezone.utc)
 
             if self.mock_mode:
                 LOGGER.info(f"MOCK: Set lights - Green={green}, Amber={amber}, Red={red}")
             else:
-                if hasattr(self.gpio, 'output'):
-                    # RPi.GPIO style
-                    for color, value in self.state.items():
-                        pin = self.pins[color]
-                        # For active_low: ON=LOW, OFF=HIGH
-                        # For active_high: ON=HIGH, OFF=LOW
-                        if self.active_low:
-                            gpio_value = self.gpio.LOW if value else self.gpio.HIGH
-                        else:
-                            gpio_value = self.gpio.HIGH if value else self.gpio.LOW
-                        self.gpio.output(pin, gpio_value)
-                else:
-                    # lgpio style
-                    for color, value in self.state.items():
-                        pin = self.pins[color]
-                        # For active_low: ON=0, OFF=1
-                        # For active_high: ON=1, OFF=0
-                        if self.active_low:
-                            gpio_value = 0 if value else 1
-                        else:
-                            gpio_value = 1 if value else 0
-                        self.gpio.gpio_write(self.gpio_chip, pin, gpio_value)
-
+                self._write_gpio(self.state)
                 LOGGER.info(f"Set lights - Green={green}, Amber={amber}, Red={red}")
 
             return {
@@ -137,6 +130,91 @@ class StackLightController:
                 "state": self.state.copy()
             }
 
+    def start_flash(self, green: bool, amber: bool, red: bool, interval: float = 0.5) -> Dict[str, Any]:
+        """
+        Start flashing the specified lights.
+
+        Args:
+            green: Flash green light
+            amber: Flash amber light
+            red: Flash red light
+            interval: Seconds for each on/off half-cycle (full cycle = 2x interval)
+
+        Returns:
+            Dictionary with success status and current state
+        """
+        try:
+            self._stop_flash_thread()
+
+            if not (green or amber or red):
+                return self.turn_off_all()
+
+            self._flashing = True
+            self._flash_interval = interval
+            self._flash_stop_event.clear()
+
+            target_state = {"green": green, "amber": amber, "red": red}
+
+            def _flash_loop():
+                lights_on = False
+                while not self._flash_stop_event.is_set():
+                    lights_on = not lights_on
+                    if lights_on:
+                        self._write_gpio(target_state)
+                        self.state = target_state.copy()
+                    else:
+                        self._write_gpio({"green": False, "amber": False, "red": False})
+                        self.state = {"green": False, "amber": False, "red": False}
+                    self.last_updated = datetime.now(timezone.utc)
+                    self._flash_stop_event.wait(interval)
+
+            self._flash_thread = threading.Thread(target=_flash_loop, daemon=True)
+            self._flash_thread.start()
+
+            self.last_updated = datetime.now(timezone.utc)
+            LOGGER.info(f"Started flashing - Green={green}, Amber={amber}, Red={red}, interval={interval}s")
+
+            return {
+                "success": True,
+                "state": {
+                    **target_state,
+                    "flashing": True,
+                    "flash_interval": interval,
+                    "last_updated": self.last_updated.isoformat(),
+                },
+                "timestamp": self.last_updated.isoformat(),
+            }
+        except Exception as e:
+            LOGGER.error(f"Failed to start flash: {e}", exc_info=True)
+            return {"success": False, "error": str(e), "state": self.state.copy()}
+
+    def stop_flash(self) -> Dict[str, Any]:
+        """Stop flashing and turn off all lights."""
+        self._stop_flash_thread()
+        return self.turn_off_all()
+
+    def _write_gpio(self, states: Dict[str, bool]) -> None:
+        """Write raw GPIO values without updating self.state or stopping flash."""
+        if self.mock_mode:
+            return
+
+        if hasattr(self.gpio, 'output'):
+            for color, value in states.items():
+                pin = self.pins[color]
+                if self.active_low:
+                    gpio_value = self.gpio.LOW if value else self.gpio.HIGH
+                else:
+                    gpio_value = self.gpio.HIGH if value else self.gpio.LOW
+                self.gpio.output(pin, gpio_value)
+        else:
+            for color, value in states.items():
+                pin = self.pins[color]
+                if self.active_low:
+                    gpio_value = 0 if value else 1
+                else:
+                    gpio_value = 1 if value else 0
+                self.gpio.gpio_write(self.gpio_chip, pin, gpio_value)
+
     def get_light_state(self) -> Dict[str, Any]:
         """
         Get the current state of all lights.
@@ -148,7 +226,9 @@ class StackLightController:
             "green": self.state["green"],
             "amber": self.state["amber"],
             "red": self.state["red"],
-            "last_updated": self.last_updated.isoformat() if self.last_updated else None
+            "flashing": self._flashing,
+            "flash_interval": self._flash_interval if self._flashing else None,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
         }
 
     def turn_off_all(self) -> Dict[str, Any]:

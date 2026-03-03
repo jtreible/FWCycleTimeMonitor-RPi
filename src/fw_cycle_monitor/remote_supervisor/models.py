@@ -50,6 +50,8 @@ class StackLightState(BaseModel):
     green: bool = Field(..., description="Green light state")
     amber: bool = Field(..., description="Amber/yellow light state")
     red: bool = Field(..., description="Red light state")
+    flashing: bool = Field(False, description="Whether lights are currently flashing")
+    flash_interval: Optional[float] = Field(None, description="Flash interval in seconds, if flashing")
     last_updated: Optional[str] = Field(None, description="ISO timestamp of last update")
 
 
@@ -59,6 +61,15 @@ class StackLightSetRequest(BaseModel):
     green: bool = Field(..., description="Green light state")
     amber: bool = Field(..., description="Amber/yellow light state")
     red: bool = Field(..., description="Red light state")
+
+
+class StackLightFlashRequest(BaseModel):
+    """Request to flash stack lights."""
+
+    green: bool = Field(False, description="Flash green light")
+    amber: bool = Field(False, description="Flash amber/yellow light")
+    red: bool = Field(False, description="Flash red light")
+    interval: float = Field(0.5, description="Flash interval in seconds (on/off cycle)", ge=0.1, le=5.0)
 
 
 class StackLightResponse(BaseModel):

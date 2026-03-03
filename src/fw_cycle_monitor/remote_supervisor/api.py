@@ -16,6 +16,7 @@ from .models import (
     MetricsResponse,
     ServiceActionResponse,
     ServiceStatusResponse,
+    StackLightFlashRequest,
     StackLightResponse,
     StackLightSetRequest,
     StackLightState,
@@ -274,6 +275,74 @@ async def turn_off_stacklight(_: str | None = Depends(require_api_key)) -> Dict[
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to turn off stack lights: {e}",
+        ) from e
+
+
+@app.post("/stacklight/flash", response_model=StackLightResponse)
+async def flash_stacklight(
+    request: StackLightFlashRequest,
+    _: str | None = Depends(require_api_key)
+) -> Dict[str, Any]:
+    """Start flashing the specified stack lights."""
+
+    try:
+        controller = _get_stacklight_controller()
+        result = controller.start_flash(
+            green=request.green,
+            amber=request.amber,
+            red=request.red,
+            interval=request.interval,
+        )
+
+        if result["success"]:
+            return {
+                "success": True,
+                "state": result["state"],
+                "timestamp": result["timestamp"],
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "state": result.get("state"),
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to start stack light flash: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to start stack light flash: {e}",
+        ) from e
+
+
+@app.post("/stacklight/stop-flash", response_model=StackLightResponse)
+async def stop_flash_stacklight(_: str | None = Depends(require_api_key)) -> Dict[str, Any]:
+    """Stop flashing and turn off all stack lights."""
+
+    try:
+        controller = _get_stacklight_controller()
+        result = controller.stop_flash()
+
+        if result["success"]:
+            return {
+                "success": True,
+                "state": result["state"],
+                "timestamp": result["timestamp"],
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("error", "Unknown error"),
+                "state": result.get("state"),
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        LOGGER.error(f"Failed to stop stack light flash: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to stop stack light flash: {e}",
         ) from e
 
 

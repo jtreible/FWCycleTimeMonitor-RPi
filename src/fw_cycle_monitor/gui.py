@@ -150,7 +150,7 @@ class Application(tk.Tk):
         )
         self._red_check.grid(row=1, column=3, sticky="w", pady=(8, 0))
 
-        # Quick action buttons
+        # Quick action buttons - solid
         stacklight_button_frame = ttk.Frame(stacklight_frame)
         stacklight_button_frame.grid(row=2, column=0, columnspan=4, pady=(12, 0), sticky="ew")
 
@@ -170,9 +170,23 @@ class Application(tk.Tk):
             row=0, column=4, padx=(0, 8)
         )
 
+        # Flash action buttons
+        flash_button_frame = ttk.Frame(stacklight_frame)
+        flash_button_frame.grid(row=3, column=0, columnspan=4, pady=(8, 0), sticky="ew")
+
+        ttk.Label(flash_button_frame, text="Flash:", foreground="#555555").grid(row=0, column=0, padx=(0, 4))
+        ttk.Button(flash_button_frame, text="Flash Green",
+                   command=lambda: self._flash_stacklight(True, False, False)).grid(row=0, column=1, padx=(0, 8))
+        ttk.Button(flash_button_frame, text="Flash Amber",
+                   command=lambda: self._flash_stacklight(False, True, False)).grid(row=0, column=2, padx=(0, 8))
+        ttk.Button(flash_button_frame, text="Flash Red",
+                   command=lambda: self._flash_stacklight(False, False, True)).grid(row=0, column=3, padx=(0, 8))
+        ttk.Button(flash_button_frame, text="Stop Flash",
+                   command=self._stop_flash_stacklight).grid(row=0, column=4, padx=(0, 8))
+
         # Config reload and service restart buttons
         stacklight_reload_frame = ttk.Frame(stacklight_frame)
-        stacklight_reload_frame.grid(row=3, column=0, columnspan=4, pady=(8, 0), sticky="ew")
+        stacklight_reload_frame.grid(row=4, column=0, columnspan=4, pady=(8, 0), sticky="ew")
 
         ttk.Button(stacklight_reload_frame, text="Reload Config", command=self._reload_stacklight_config).grid(
             row=0, column=0, padx=(0, 8)
@@ -484,6 +498,14 @@ class Application(tk.Tk):
                 self._stacklight_green_var.set(state.get("green", False))
                 self._stacklight_amber_var.set(state.get("amber", False))
                 self._stacklight_red_var.set(state.get("red", False))
+
+                settings = get_settings()
+                mode = "MOCK MODE" if settings.stacklight.mock_mode else "Hardware Mode"
+                if state.get("flashing"):
+                    interval = state.get("flash_interval", 0.5)
+                    self._stacklight_status_var.set(f"Flashing ({interval}s) - {mode}")
+                else:
+                    self._stacklight_status_var.set(f"Ready (API mode - {mode})")
         except Exception as exc:
             LOGGER.error(f"Failed to refresh stack light state: {exc}", exc_info=True)
 
@@ -612,6 +634,61 @@ class Application(tk.Tk):
         except Exception as exc:
             LOGGER.error(f"Failed to turn off stack lights: {exc}", exc_info=True)
             messagebox.showerror("Error", f"Failed to turn off stack lights: {exc}", parent=self)
+
+    def _flash_stacklight(self, green: bool, amber: bool, red: bool, interval: float = 0.5) -> None:
+        """Start flashing specified stack lights."""
+        if not self._api_base_url or not self._api_key:
+            messagebox.showwarning("Stack Light", "API not initialized", parent=self)
+            return
+
+        try:
+            data = {"green": green, "amber": amber, "red": red, "interval": interval}
+            result = self._api_request("/stacklight/flash", method="POST", data=data)
+
+            if result and result.get("success"):
+                self._refresh_stacklight_state()
+            elif result:
+                messagebox.showerror(
+                    "Stack Light Error",
+                    f"Failed to flash lights: {result.get('error', 'Unknown error')}",
+                    parent=self
+                )
+            else:
+                messagebox.showerror(
+                    "Connection Error",
+                    "Failed to connect to remote supervisor API",
+                    parent=self
+                )
+        except Exception as exc:
+            LOGGER.error(f"Failed to flash stack light: {exc}", exc_info=True)
+            messagebox.showerror("Error", f"Failed to flash stack lights: {exc}", parent=self)
+
+    def _stop_flash_stacklight(self) -> None:
+        """Stop flashing stack lights."""
+        if not self._api_base_url or not self._api_key:
+            messagebox.showwarning("Stack Light", "API not initialized", parent=self)
+            return
+
+        try:
+            result = self._api_request("/stacklight/stop-flash", method="POST")
+
+            if result and result.get("success"):
+                self._refresh_stacklight_state()
+            elif result:
+                messagebox.showerror(
+                    "Stack Light Error",
+                    f"Failed to stop flash: {result.get('error', 'Unknown error')}",
+                    parent=self
+                )
+            else:
+                messagebox.showerror(
+                    "Connection Error",
+                    "Failed to connect to remote supervisor API",
+                    parent=self
+                )
+        except Exception as exc:
+            LOGGER.error(f"Failed to stop stack light flash: {exc}", exc_info=True)
+            messagebox.showerror("Error", f"Failed to stop flash: {exc}", parent=self)
 
     def _reload_stacklight_config(self) -> None:
         """Reload stack light configuration and reinitialize API connection."""
