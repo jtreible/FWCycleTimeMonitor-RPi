@@ -32,6 +32,8 @@ public class StackLightState
     public bool Green { get; set; }
     public bool Amber { get; set; }
     public bool Red { get; set; }
+    public bool Flashing { get; set; }
+    public double? FlashInterval { get; set; }
     public string? LastUpdated { get; set; }
 }
 
@@ -40,6 +42,14 @@ public class StackLightSetRequest
     public bool Green { get; set; }
     public bool Amber { get; set; }
     public bool Red { get; set; }
+}
+
+public class StackLightFlashRequest
+{
+    public bool Green { get; set; }
+    public bool Amber { get; set; }
+    public bool Red { get; set; }
+    public double Interval { get; set; } = 0.5;
 }
 
 public class StackLightResponse

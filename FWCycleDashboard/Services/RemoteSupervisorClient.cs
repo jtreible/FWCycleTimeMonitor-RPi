@@ -29,7 +29,7 @@ public class RemoteSupervisorClient
         var protocol = machine.UseHttps ? "https" : "http";
         client.BaseAddress = new Uri($"{protocol}://{machine.IpAddress}:{machine.Port}");
         client.DefaultRequestHeaders.Add("X-API-Key", machine.ApiKey);
-        client.Timeout = TimeSpan.FromSeconds(10);
+        client.Timeout = TimeSpan.FromSeconds(3);
         return client;
     }
 
@@ -264,6 +264,76 @@ public class RemoteSupervisorClient
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to turn off stack light on machine {MachineId} at {IpAddress}",
+                machine.MachineId, machine.IpAddress);
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> FlashStackLightAsync(
+        Machine machine,
+        bool green,
+        bool amber,
+        bool red,
+        double interval = 0.5)
+    {
+        try
+        {
+            using var client = CreateClient(machine);
+            var request = new StackLightFlashRequest
+            {
+                Green = green,
+                Amber = amber,
+                Red = red,
+                Interval = interval
+            };
+            var json = JsonSerializer.Serialize(request, _jsonOptions);
+            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var response = await client.PostAsync("/stacklight/flash", content);
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<StackLightResponse>(responseJson, _jsonOptions);
+
+            if (result?.Success == true)
+            {
+                return (true, null);
+            }
+            else
+            {
+                return (false, result?.Error ?? "Unknown error");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to flash stack light on machine {MachineId} at {IpAddress}",
+                machine.MachineId, machine.IpAddress);
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Success, string? Error)> StopFlashStackLightAsync(Machine machine)
+    {
+        try
+        {
+            using var client = CreateClient(machine);
+            var response = await client.PostAsync("/stacklight/stop-flash", null);
+            response.EnsureSuccessStatusCode();
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var result = JsonSerializer.Deserialize<StackLightResponse>(responseJson, _jsonOptions);
+
+            if (result?.Success == true)
+            {
+                return (true, null);
+            }
+            else
+            {
+                return (false, result?.Error ?? "Unknown error");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to stop flash on machine {MachineId} at {IpAddress}",
                 machine.MachineId, machine.IpAddress);
             return (false, ex.Message);
         }
