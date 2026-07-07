@@ -1,6 +1,45 @@
+# FW Cycle Monitor — Fleet & GPIO Scripts
+
+## Updating code across the fleet — `fleet-update.sh`
+
+**This is the easy way to push the latest software to the Pis.** Each Pi already
+self-updates on boot (`git reset --hard origin/main` in `/opt/fw-cycle-monitor`, run by
+the service on startup), so a freshly-powered Pi picks up new code on its own. Use
+`fleet-update.sh` when you want to update Pis **now** without waiting for a reboot, or to
+recover a Pi that is stuck on old code.
+
+For every reachable Pi it force-syncs the checkout to the latest `main`, restarts the
+services (which re-applies the Debian 13 GPIO fix automatically), and reports the running
+commit + service state. It is idempotent — re-run it freely as each batch comes online.
+
+```bash
+# Password is read from $PI_PASS (prompted if unset). Same login across the fleet.
+PI_PASS='<pi-password>' bash scripts/fleet-update.sh                 # scan 192.168.3.4-254
+PI_PASS='<pi-password>' bash scripts/fleet-update.sh 192.168.3.20-40 # just this range
+PI_PASS='<pi-password>' bash scripts/fleet-update.sh 192.168.3.5      # a single Pi
+PI_PASS='<pi-password>' bash scripts/fleet-update.sh --dry-run        # report versions only
+```
+
+- On Windows it uses **plink** (PuTTY) with `$PI_PASS`; elsewhere it falls back to `ssh`
+  with key auth (see `setup-ssh-keys.sh`). Override the login user with `PI_USER`
+  (default `fstre`).
+- Unreachable IPs are skipped instantly via a fast TCP probe on port 22.
+- Because updates are a **hard reset**, machine-specific files must be untracked/generated
+  (like `run_in_venv.sh`) — never hand-edit a tracked file in `/opt/fw-cycle-monitor`, or
+  that edit is simply discarded on the next update.
+
+> Note: `update-all-pis.sh` is different — it runs **OS/apt** upgrades (holding the
+> Python/GPIO stack). `fleet-update.sh` updates the **application code**.
+
+---
+
 # GPIO Fix Scripts for Debian 13
 
 These scripts fix RPi.GPIO compatibility issues on Debian 13 (Trixie) for the FW Cycle Monitor.
+
+> As of the self-healing service, `gpio_fix.py` applies this fix automatically on every
+> service start, so `fleet-update.sh` (which restarts the services) fixes GPIO as a side
+> effect. The scripts below remain for manual/one-off use.
 
 ## The Problem
 

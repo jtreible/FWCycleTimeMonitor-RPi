@@ -80,10 +80,19 @@ def update_repository(repo_path: Path, remote: str = "origin", branch: str = "ma
 
     LOGGER.info("Updating repository to %s", remote_rev)
     try:
-        _run_git_command(["pull", "--ff-only", remote, branch], repo_path)
+        # Force-sync the working tree to the fetched remote branch. We use a hard
+        # reset rather than ``git pull --ff-only`` because the checkout lives on a
+        # deployed device where a tracked file may have been edited in place (for
+        # example the desktop launcher's install path). A fast-forward merge aborts
+        # in that situation ("Your local changes would be overwritten by merge"),
+        # which previously wedged the auto-updater indefinitely and left the device
+        # running stale code. ``reset --hard`` makes the committed content
+        # authoritative on every update, so machine-specific files must be kept
+        # untracked/generated rather than hand-edited in the tree.
+        _run_git_command(["reset", "--hard", f"{remote}/{branch}"], repo_path)
         return True
     except subprocess.CalledProcessError:
-        LOGGER.exception("Failed to fast-forward repository")
+        LOGGER.exception("Failed to hard-reset repository to %s", remote_rev)
         return False
 
 
