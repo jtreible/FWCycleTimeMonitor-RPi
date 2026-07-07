@@ -11,6 +11,13 @@ from typing import Optional
 
 LOGGER = logging.getLogger(__name__)
 
+# Canonical update source for the Pi fleet. The updater re-points every device's
+# ``origin`` at this URL before each fetch, so a Pi cloned from an older/other
+# source (e.g. the retired personal repo) migrates itself to the company repo on
+# its next update with no manual intervention. Change this in one place to move
+# the whole fleet to a new deploy repo.
+CANONICAL_REMOTE_URL = "https://github.com/FourSquareTRE/fw-cycle-monitor-pi.git"
+
 
 def _run_git_command(args: list[str], repo_path: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -45,6 +52,31 @@ def determine_repo_path(default: Optional[Path] = None) -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _ensure_canonical_remote(repo_path: Path, remote: str = "origin") -> None:
+    """Re-point ``remote`` at :data:`CANONICAL_REMOTE_URL` when it differs.
+
+    This is what lets a device migrate itself to the current deploy repo: on the
+    first update after receiving this code, it rewrites its ``origin`` URL and the
+    subsequent fetch/reset pulls from the canonical repo. It is a no-op once the
+    remote already matches, and a failure here is non-fatal (we keep the existing
+    remote and let the normal fetch proceed).
+    """
+
+    if not CANONICAL_REMOTE_URL:
+        return
+    try:
+        current = _run_git_command(["remote", "get-url", remote], repo_path).stdout.strip()
+    except subprocess.CalledProcessError:
+        return
+    if current == CANONICAL_REMOTE_URL:
+        return
+    LOGGER.info("Re-pointing '%s' from %s to canonical %s", remote, current, CANONICAL_REMOTE_URL)
+    try:
+        _run_git_command(["remote", "set-url", remote, CANONICAL_REMOTE_URL], repo_path)
+    except subprocess.CalledProcessError:
+        LOGGER.warning("Failed to re-point remote '%s'; continuing with %s", remote, current, exc_info=True)
+
+
 def update_repository(repo_path: Path, remote: str = "origin", branch: str = "main") -> bool:
     """Fetch updates from the remote and fast-forward if needed.
 
@@ -65,6 +97,10 @@ def update_repository(repo_path: Path, remote: str = "origin", branch: str = "ma
     if remote not in remotes:
         LOGGER.info("Remote '%s' is not configured; skipping update", remote)
         return False
+
+    # Migrate the device onto the canonical deploy repo before fetching, so a
+    # single published update moves the whole fleet without touching each Pi.
+    _ensure_canonical_remote(repo_path, remote)
 
     try:
         _run_git_command(["fetch", remote], repo_path)
